@@ -55,6 +55,7 @@ class PullRequestCheckout(object):
             os.mkdir(path)
         rv = cls(number, path)
         git_command("clone", "--no-checkout", base_path, path, cwd=path)
+        git_command("submodule", "init")
         rv.update()
         return rv
 
@@ -64,6 +65,7 @@ class PullRequestCheckout(object):
     def update(self):
         git_command("fetch", "origin", "refs/remotes/origin/pr/%i:pr" % self.number, cwd=self.path)
         git_command("checkout", "pr", cwd=self.path)
+        git_command("submodule", "update", "--recursive")
 
 def git_command(command, *args, **kwargs):
     cwd = kwargs.get("cwd", base_path)
