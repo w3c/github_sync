@@ -28,11 +28,14 @@ class MasterCheckout(object):
         git_command("reset", "--hard", "HEAD")
         git_command("config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/pr/*", cwd=path)
         git_command("fetch", "origin", cwd=path)
+        git_command("submodule", "init")
+        git_command("submodule", "update", "--recursive")
         return rv
 
     def update(self):
         git_command("fetch", "origin", cwd=self.path)
         git_command("checkout", "origin/master")
+        git_command("submodule", "update", "--recursive")
 
 class PullRequestCheckout(object):
     def __init__(self, number, path):
@@ -95,11 +98,14 @@ def pullRequestSynchronize(number):
     PullRequestCheckout.fromNumber(number).update()
 
 def processPush(data):
-    checkout = MasterCheckout()
-    checkout.update()
+    pass
 
 def main():
     data = sys.stdin.read()
+
+    checkout = MasterCheckout()
+    checkout.update()
+
     if data:
         data = json.loads(data)
         if "pull_request" in data:
