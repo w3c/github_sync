@@ -149,10 +149,28 @@ def update_master(base_path):
     checkout = MasterCheckout(base_path)
     checkout.update()
 
+def update_pull_requests(base_path):
+    for path in os.listdir(os.path.join(base_path, "submissions")):
+        try:
+            number = int(os.path.split(path)[1])
+        except ValueError:
+            continue
+        if PullRequestCheckout.exists(base_path, number):
+            PullRequestCheckout(base_path, number).update()
+
+def post_authentic(config, body):
+    signature = os.environ.get("HTTP_X_HUB_SIGNATURE", None)
+    if not signature:
+        return False
+    return signature == "sha1=%s" % hmac.new(config["secret"], body).hexdigest()
+
 def main(config):
     data = sys.stdin.read()
 
     if data:
+        if not post_authentic(config, data):
+            print >> sys.stderr, "Got message with incorrect signature"
+            return
         data = json.loads(data)
 
         authorised_users = get_authorised_users(config)
@@ -166,6 +184,7 @@ def main(config):
     else:
         #This is a test, presumably, just update master
         update_master(config["base_path"])
+        update_pull_requests(config["base_path"])
 
     print "Content-Type: text/plain"
     print "\r"
@@ -187,6 +206,19 @@ def setup(config):
     create_master(config)
     for number in get_open_pull_request_numbers(config):
         pull_request = PullRequestCheckout.create(config["base_path"], number)
+    register_events(config)
+
+def register_events(config):
+    events = ["push", "pull_request", "issue_comment"]:
+    data = {"name":"web",
+            "events":events,
+    "config":{"url":config["url"],
+              "content_type":"json",
+              "secret":config["secret"]},
+              "active":True
+              }
+    resp = requests.post("https://api.github.com/repos/%s/%s/hooks", data=json.dumps(data), auth=(config["username"], config["password"]))
+    print >> sys.stderr, "%i\n%s" % (resp.status, resp.text)
 
 def get_config():
     config = ConfigParser.SafeConfigParser()

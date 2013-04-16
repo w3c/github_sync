@@ -1,0 +1,8 @@
+[sync]
+org_name = #org name
+repo_name = #repo name
+username = #github username
+password = #github password
+base_path = #checkout base path
+url = #url to sync script
+secret = #secret used to authenticate incoming POSTs
