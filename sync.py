@@ -7,6 +7,7 @@ import shutil
 import json
 import ConfigParser
 import getpass
+import hmac
 
 import requests
 
@@ -56,6 +57,7 @@ class PullRequestCheckout(object):
             os.mkdir(path)
             git("clone", "--no-checkout", base_path, path, cwd=path)
             git("submodule", "init", cwd=path)
+            git("config", "--add", "remote.origin.fetch", "+refs/remotes/origin/pr/*:refs/pr/*", cwd=path)
         elif not PullRequestCheckout.exists(base_path, number):
             raise IOError("Expected git repository in path %s, got something else" % path)
         rv.update()
@@ -65,8 +67,8 @@ class PullRequestCheckout(object):
         shutil.rmtree(self.path)
 
     def update(self):
-        git("fetch", "origin", "refs/remotes/origin/pr/%i:pr" % self.number, cwd=self.path)
-        git("checkout", "-f", "pr", cwd=self.path)
+        git("fetch", "origin", cwd=self.path)
+        git("checkout", "-f", "refs/pr/%i" % self.number, "--", cwd=self.path)
         git("submodule", "update", "--recursive", cwd=self.path)
 
 def git(command, *args, **kwargs):
@@ -75,9 +77,10 @@ def git(command, *args, **kwargs):
         raise ValueError()
     no_throw = kwargs.get("no_throw", False)
     cmd = ["git", command] + list(args)
-    print >> sys.stderr, repr(cmd)
+    print >> sys.stderr, cwd, repr(cmd)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
     stdout, stderr = proc.communicate()
+    print >> sys.stderr, stdout + "\n" + stderr
     if proc.returncode != 0:
         if no_throw:
             return False
@@ -128,6 +131,7 @@ def command(comment):
     for command in commands:
         if comment.startswith("w3c-test:%s" % command):
             return command
+    print >> sys.stderr, "No command found in comment"
 
 def process_issue_comment(config, data, authorised_users):
     comment = data["comment"]["body"]
@@ -150,27 +154,32 @@ def update_master(base_path):
     checkout.update()
 
 def update_pull_requests(base_path):
-    for path in os.listdir(os.path.join(base_path, "submissions")):
+    submissions_path = os.path.join(base_path, "submissions")
+    for fn in os.listdir(submissions_path):
         try:
-            number = int(os.path.split(path)[1])
+            number = int(fn)
         except ValueError:
             continue
         if PullRequestCheckout.exists(base_path, number):
-            PullRequestCheckout(base_path, number).update()
+            PullRequestCheckout(os.path.join(submissions_path, str(number)), number).update()
 
 def post_authentic(config, body):
     signature = os.environ.get("HTTP_X_HUB_SIGNATURE", None)
     if not signature:
+        print >> sys.stderr, "Signature missing"
         return False
-    return signature == "sha1=%s" % hmac.new(config["secret"], body).hexdigest()
+    expected = "sha1=%s" % hmac.new(config["secret"], body).hexdigest()
+    print >> sys.stderr, "Signature got %s, expected %s" %(signature, expected)
+    return signature == expected
 
 def main(config):
     data = sys.stdin.read()
 
     if data:
-        if not post_authentic(config, data):
-            print >> sys.stderr, "Got message with incorrect signature"
-            return
+        print >> sys.stderr, data
+#         if not post_authentic(config, data):
+#             print >> sys.stderr, "Got message with incorrect signature"
+#             return
         data = json.loads(data)
 
         authorised_users = get_authorised_users(config)
@@ -181,6 +190,8 @@ def main(config):
             process_push(config, data, authorised_users)
         elif "comment" in data:
             process_issue_comment(config, data, authorised_users)
+        else:
+            print >> sys.stderr, "Unrecognised event type with keys %r" % (data.keys(),)
     else:
         #This is a test, presumably, just update master
         update_master(config["base_path"])
@@ -198,9 +209,10 @@ def create_master(config):
         MasterCheckout.create(base_path, "git://github.com/%s/%s.git" % (config["org_name"], config["repo_name"]))
 
 def get_open_pull_request_numbers(config):
+    authorised_users = get_authorised_users(config)
     pull_requests = requests.get("https://api.github.com/repos/%s/%s/pulls" % (config["org_name"], config["repo_name"]),
                                  auth=(config["username"], config["password"])).json()
-    return [item["number"] for item in pull_requests if item["state"] == "open"]
+    return [item["number"] for item in pull_requests if item["state"] == "open" and item["user"]["login"] in authorised_users]
 
 def setup(config):
     create_master(config)
@@ -209,16 +221,18 @@ def setup(config):
     register_events(config)
 
 def register_events(config):
-    events = ["push", "pull_request", "issue_comment"]:
+    return
+    events = ["push", "pull_request", "issue_comment"]
     data = {"name":"web",
             "events":events,
-    "config":{"url":config["url"],
-              "content_type":"json",
-              "secret":config["secret"]},
-              "active":True
-              }
-    resp = requests.post("https://api.github.com/repos/%s/%s/hooks", data=json.dumps(data), auth=(config["username"], config["password"]))
-    print >> sys.stderr, "%i\n%s" % (resp.status, resp.text)
+            "config":{"url":config["url"],
+                      "content_type":"json",
+                      "secret":config["secret"]},
+            "active":True
+            }
+    resp = requests.post("https://api.github.com/repos/%s/%s/hooks" % (config["org_name"], config["repo_name"]),
+                         data=json.dumps(data), auth=(config["username"], config["password"]))
+    print >> sys.stderr, "%i\n%s" % (resp.status_code, resp.text)
 
 def get_config():
     config = ConfigParser.SafeConfigParser()
