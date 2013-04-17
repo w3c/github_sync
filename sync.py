@@ -103,7 +103,7 @@ def process_pull_request(config, data, authorised_users):
                         "reopened": pull_request_opened,
                         "closed": end_mirror,
                         "synchronize": sync_mirror }
-    action_handlers["action"](base_path, data["number"], authorised_users)
+    action_handlers[action](base_path, data["number"], authorised_users)
 
 def pull_request_opened(base_path, number, authorised_users):
     if data["pull_request"]["user"]["login"] in authorised_users:
