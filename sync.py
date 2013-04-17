@@ -93,37 +93,37 @@ def get_authorised_users(config):
                         auth=(config["username"], config["password"]))
     return set(item["login"] for item in resp.json())
 
-def process_pull_request(config, data, authorised_users):
+def process_pull_request(config, data, user_is_authorised):
     base_path = config["base_path"]
 
     update_master(base_path)
     action = data["action"]
 
-    action_handlers = { "opened": pull_request_opened,
-                        "reopened": pull_request_opened,
-                        "closed": end_mirror,
-                        "synchronize": sync_mirror }
-    action_handlers[action](base_path, data["number"], authorised_users)
+    action_handlers = {"opened": pull_request_opened,
+                       "reopened": pull_request_opened,
+                       "closed": end_mirror,
+                       "synchronize": sync_mirror}
+    action_handlers[action](base_path, data["pull_request"]["number"], user_is_authorised)
 
-def pull_request_opened(base_path, number, authorised_users):
-    if data["pull_request"]["user"]["login"] in authorised_users:
-        start_mirror(base_path, number, authorised_users)
+def pull_request_opened(base_path, number, user_is_authorised):
+    if user_is_authorised:
+        start_mirror(base_path, number, user_is_authorised)
 
-def start_mirror(base_path, number, authorised_users):
+def start_mirror(base_path, number, user_is_authorised):
     if not PullRequestCheckout.exists(base_path, number):
         PullRequestCheckout.create(base_path, number)
     else:
         PullRequestCheckout.fromNumber(base_path, number).update()
 
-def end_mirror(base_path, number, authorised_users):
+def end_mirror(base_path, number, user_is_authorised):
     if PullRequestCheckout.exists(base_path, number):
         PullRequestCheckout.fromNumber(base_path, number).delete()
 
-def sync_mirror(base_path, number, authorised_users):
+def sync_mirror(base_path, number, user_is_authorised):
     if PullRequestCheckout.exists(base_path, number):
         PullRequestCheckout.fromNumber(base_path, number).update()
 
-def process_push(config, data, authorised_users):
+def process_push(config):
     update_master(config["base_path"])
 
 def command(comment):
@@ -133,12 +133,12 @@ def command(comment):
             return command
     print >> sys.stderr, "No command found in comment"
 
-def process_issue_comment(config, data, authorised_users):
+def process_issue_comment(config, data, user_is_authorised):
     comment = data["comment"]["body"]
 
     if data["issue"]["pull_request"]["diff_url"] is None:
         return
-    elif data["comment"]["user"]["login"] not in authorised_users:
+    elif not user_is_authorised:
         return
     elif not command(comment):
         return
@@ -147,7 +147,7 @@ def process_issue_comment(config, data, authorised_users):
         pull_request_number = int(data["issue"]["pull_request"]["diff_url"].rsplit("/", 1)[1])
         action_handlers = {"mirror":start_mirror,
                            "unmirror":end_mirror}
-        action_handlers[command(comment)](base_path, number, authorised_users)
+        action_handlers[command(comment)](base_path, pull_request_number, user_is_authorised)
 
 def update_master(base_path):
     checkout = MasterCheckout(base_path)
@@ -184,14 +184,16 @@ def main(config):
 
         authorised_users = get_authorised_users(config)
 
-        if "pull_request" in data:
-            process_pull_request(config, data, authorised_users)
-        elif "commits" in data:
-            process_push(config, data, authorised_users)
-        elif "comment" in data:
-            process_issue_comment(config, data, authorised_users)
+        if "commits" in data:
+            process_push(config)
         else:
-            print >> sys.stderr, "Unrecognised event type with keys %r" % (data.keys(),)
+            user_is_authorised = data["user"]["login"] in authorised_users
+            if "pull_request" in data:
+                process_pull_request(config, data, user_is_authorised)
+            elif "comment" in data:
+                process_issue_comment(config, data, user_is_authorised)
+            else:
+                print >> sys.stderr, "Unrecognised event type with keys %r" % (data.keys(),)
     else:
         #This is a test, presumably, just update master
         update_master(config["base_path"])
