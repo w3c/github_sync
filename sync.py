@@ -103,7 +103,7 @@ def process_pull_request(config, data, user_is_authorised):
                        "reopened": pull_request_opened,
                        "closed": end_mirror,
                        "synchronize": sync_mirror}
-    action_handlers[action](config["base_path"], data["pull_request"]["number"], user_is_authorised)
+    action_handlers[action](base_path, data["pull_request"]["number"], user_is_authorised)
 
 def pull_request_opened(base_path, number, user_is_authorised):
     if user_is_authorised:
@@ -148,7 +148,7 @@ def process_issue_comment(config, data, user_is_authorised):
         pull_request_number = int(os.path.splitext(filename)[0])
         action_handlers = {"mirror":start_mirror,
                            "unmirror":end_mirror}
-        action_handlers[command(comment)](base_path, pull_request_number, user_is_authorised)
+        action_handlers[command(comment)](config["base_path"], pull_request_number, user_is_authorised)
 
 def update_master(base_path):
     checkout = MasterCheckout(base_path)
