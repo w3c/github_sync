@@ -103,7 +103,7 @@ def process_pull_request(config, data, user_is_authorised):
                        "reopened": pull_request_opened,
                        "closed": end_mirror,
                        "synchronize": sync_mirror}
-    action_handlers[action](base_path, data["pull_request"]["number"], user_is_authorised)
+    action_handlers[action](config["base_path"], data["pull_request"]["number"], user_is_authorised)
 
 def pull_request_opened(base_path, number, user_is_authorised):
     if user_is_authorised:
