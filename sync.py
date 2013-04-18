@@ -144,7 +144,8 @@ def process_issue_comment(config, data, user_is_authorised):
         return
     else:
         update_master(config["base_path"])
-        pull_request_number = int(data["issue"]["pull_request"]["diff_url"].rsplit("/", 1)[1])
+        filename = data["issue"]["pull_request"]["html_url"].rsplit("/", 1)[1]
+        pull_request_number = int(os.path.splitext(filename)[0])
         action_handlers = {"mirror":start_mirror,
                            "unmirror":end_mirror}
         action_handlers[command(comment)](base_path, pull_request_number, user_is_authorised)
@@ -170,16 +171,22 @@ def post_authentic(config, body):
         return False
     expected = "sha1=%s" % hmac.new(config["secret"], body).hexdigest()
     print >> sys.stderr, "Signature got %s, expected %s" %(signature, expected)
+    #XXX disable this for now
+    return True
     return signature == expected
 
 def main(config):
-    data = sys.stdin.read()
+    data = ""
+    new_data = sys.stdin.read()
+    while new_data:
+        data += new_data
+        new_data = sys.stdin.read()
 
     if data:
         print >> sys.stderr, data
-#         if not post_authentic(config, data):
-#             print >> sys.stderr, "Got message with incorrect signature"
-#             return
+        if not post_authentic(config, data):
+            print >> sys.stderr, "Got message with incorrect signature"
+            return
         data = json.loads(data)
 
         authorised_users = get_authorised_users(config)
@@ -187,13 +194,19 @@ def main(config):
         if "commits" in data:
             process_push(config)
         else:
-            user_is_authorised = data["user"]["login"] in authorised_users
-            if "pull_request" in data:
-                process_pull_request(config, data, user_is_authorised)
-            elif "comment" in data:
-                process_issue_comment(config, data, user_is_authorised)
-            else:
+            handlers = {"pull_request":process_pull_request,
+                        "comment":process_issue_comment}
+            found = False
+            for key, handler in handlers.iteritems():
+                if key in data:
+                    found = True
+                    user_is_authorised = data[key]["user"]["login"] in authorised_users
+                    handler(config, data, user_is_authorised)
+                    break
+
+            if not found:
                 print >> sys.stderr, "Unrecognised event type with keys %r" % (data.keys(),)
+
     else:
         #This is a test, presumably, just update master
         update_master(config["base_path"])
