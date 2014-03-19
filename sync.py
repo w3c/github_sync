@@ -91,7 +91,7 @@ def git(command, *args, **kwargs):
 def get_authorised_users(config):
     resp = requests.get("https://api.github.com/repos/%s/%s/collaborators" % (config["org_name"], config["repo_name"]),
                         auth=(config["username"], config["password"]))
-    return set(item["login"] for item in resp.json())
+    return set(item["login"] for item in resp.json)
 
 def process_pull_request(config, data, user_is_authorised):
     base_path = config["base_path"]
@@ -164,8 +164,7 @@ def update_pull_requests(base_path):
         if PullRequestCheckout.exists(base_path, number):
             PullRequestCheckout(os.path.join(submissions_path, str(number)), number).update()
 
-def post_authentic(config, body):
-    signature = os.environ.get("HTTP_X_HUB_SIGNATURE", None)
+def post_authentic(config, body, signature):
     if not signature:
         print >> sys.stderr, "Signature missing"
         return False
@@ -175,16 +174,13 @@ def post_authentic(config, body):
     return True
     return signature == expected
 
-def main(config):
-    data = ""
-    new_data = sys.stdin.read()
-    while new_data:
-        data += new_data
-        new_data = sys.stdin.read()
+def main(request, response):
+    config = get_config()
+    data = request.body
 
     if data:
         print >> sys.stderr, data
-        if not post_authentic(config, data):
+        if not post_authentic(config, data, request.headers["X-Hub-Signature"]):
             print >> sys.stderr, "Got message with incorrect signature"
             return
         data = json.loads(data)
@@ -207,14 +203,13 @@ def main(config):
             if not found:
                 print >> sys.stderr, "Unrecognised event type with keys %r" % (data.keys(),)
 
-    else:
+    #else:
         #This is a test, presumably, just update master
-        update_master(config["base_path"])
-        update_pull_requests(config["base_path"])
+        #update_master(config["base_path"])
+        #update_pull_requests(config["base_path"])
 
-    print "Content-Type: text/plain"
-    print "\r"
-    print "Success"
+    response.headers.append("Content-Type", "text/plain")
+    return "Success"
 
 def create_master(config):
     base_path = config["base_path"]
@@ -262,5 +257,3 @@ if __name__ == "__main__":
     config = get_config()
     if "--setup" in sys.argv:
         setup(config)
-    else:
-        main(config)
