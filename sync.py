@@ -91,7 +91,7 @@ def git(command, *args, **kwargs):
 def get_authorised_users(config):
     resp = requests.get("https://api.github.com/repos/%s/%s/collaborators" % (config["org_name"], config["repo_name"]),
                         auth=(config["username"], config["password"]))
-    return set(item["login"] for item in resp.json)
+    return set(item["login"] for item in resp.json())
 
 def process_pull_request(config, data, user_is_authorised):
     base_path = config["base_path"]
