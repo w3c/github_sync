@@ -89,7 +89,7 @@ def git(command, *args, **kwargs):
     return True
 
 def get_authorised_users(config):
-    resp = requests.get("https://api.github.com/repos/%s/%s/collaborators" % (config["org_name"], config["repo_name"]),
+    resp = requests.get("https://api.github.com/repos/%s/%s/collaborators?per_page=200" % (config["org_name"], config["repo_name"]),
                         auth=(config["username"], config["password"]))
     return set(item["login"] for item in resp.json())
 
