@@ -8,6 +8,7 @@ import json
 import ConfigParser
 import getpass
 import hmac
+import itertools
 
 import requests
 
@@ -89,16 +90,14 @@ def git(command, *args, **kwargs):
     return True
 
 def get_authorised_users(config):
-    page = 1
-    count = 100
     result = set()
-    while count == 100:
-        resp = requests.get("https://api.github.com/repos/%s/%s/collaborators?per_page=100&page=%s" % (config["org_name"], config["repo_name"], page),
+    for i in itertools.count(1):
+        resp = requests.get("https://api.github.com/repos/%s/%s/collaborators?per_page=100&page=%s" % (config["org_name"], config["repo_name"], i),
                             auth=(config["username"], config["password"]))
-        json = resp.json()
-        result = result.union(set(item["login"] for item in json))
-        count = len(json)
-        page += 1
+        data = resp.json()
+        result |= set(item["login"] for item in data)
+        if len(data) < 100:
+            break
     return result
 
 def process_pull_request(config, data, user_is_authorised):
