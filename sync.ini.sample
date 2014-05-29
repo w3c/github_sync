@@ -6,3 +6,4 @@ password = #github password
 base_path = #checkout base path
 url = #url to sync script
 secret = #secret used to authenticate incoming POSTs
+lockfile = #path to lockfile

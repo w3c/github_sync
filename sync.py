@@ -9,6 +9,7 @@ import ConfigParser
 import getpass
 import hmac
 import itertools
+import lockfile
 
 import requests
 
@@ -185,6 +186,13 @@ def main(request, response):
     config = get_config()
     data = request.body
 
+    lock = lockfile.FileLock(config["lockfile"])
+    try:
+        lock.acquire(timeout=60)
+    except lockfile.LockTimeout:
+        print >> sys.stderr, "Lock file detected"
+        lock.break_lock()
+        lock.acquire()
     if data:
         print >> sys.stderr, data
         if not post_authentic(config, data, request.headers["X-Hub-Signature"]):
@@ -214,6 +222,7 @@ def main(request, response):
         #This is a test, presumably, just update master
         #update_master(config["base_path"])
         #update_pull_requests(config["base_path"])
+    lock.release()
 
     response.headers.append("Content-Type", "text/plain")
     return "Success"
