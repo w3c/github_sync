@@ -188,11 +188,9 @@ def main(request, response):
 
     lock = lockfile.FileLock(config["lockfile"])
     try:
-        lock.acquire(timeout=60)
+        lock.acquire(timeout=120)
     except lockfile.LockTimeout:
-        print >> sys.stderr, "Lock file detected"
-        lock.break_lock()
-        lock.acquire()
+        print >> sys.stderr, "Lock file detected for payload %s" % request.headers["X-GitHub-Delivery"]
     if data:
         print >> sys.stderr, data
         if not post_authentic(config, data, request.headers["X-Hub-Signature"]):
