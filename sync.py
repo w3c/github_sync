@@ -189,39 +189,40 @@ def main(request, response):
     lock = lockfile.FileLock(config["lockfile"])
     try:
         lock.acquire(timeout=120)
+        if data:
+            print >> sys.stderr, data
+            if not post_authentic(config, data, request.headers["X-Hub-Signature"]):
+                print >> sys.stderr, "Got message with incorrect signature"
+                return
+            data = json.loads(data)
+
+            authorised_users = get_authorised_users(config)
+
+            if "commits" in data:
+                process_push(config)
+            else:
+                handlers = {"pull_request":process_pull_request,
+                            "comment":process_issue_comment}
+                found = False
+                for key, handler in handlers.iteritems():
+                    if key in data:
+                        found = True
+                        user_is_authorised = data[key]["user"]["login"] in authorised_users
+                        handler(config, data, user_is_authorised)
+                        break
+
+                if not found:
+                    print >> sys.stderr, "Unrecognised event type with keys %r" % (data.keys(),)
+
+        #else:
+            #This is a test, presumably, just update master
+            #update_master(config["base_path"])
+            #update_pull_requests(config["base_path"])
     except lockfile.LockTimeout:
         print >> sys.stderr, "Lock file detected for payload %s" % request.headers["X-GitHub-Delivery"]
         sys.exit(1)
-    if data:
-        print >> sys.stderr, data
-        if not post_authentic(config, data, request.headers["X-Hub-Signature"]):
-            print >> sys.stderr, "Got message with incorrect signature"
-            return
-        data = json.loads(data)
-
-        authorised_users = get_authorised_users(config)
-
-        if "commits" in data:
-            process_push(config)
-        else:
-            handlers = {"pull_request":process_pull_request,
-                        "comment":process_issue_comment}
-            found = False
-            for key, handler in handlers.iteritems():
-                if key in data:
-                    found = True
-                    user_is_authorised = data[key]["user"]["login"] in authorised_users
-                    handler(config, data, user_is_authorised)
-                    break
-
-            if not found:
-                print >> sys.stderr, "Unrecognised event type with keys %r" % (data.keys(),)
-
-    #else:
-        #This is a test, presumably, just update master
-        #update_master(config["base_path"])
-        #update_pull_requests(config["base_path"])
-    lock.release()
+    finally:
+        lock.release()
 
     response.headers.append("Content-Type", "text/plain")
     return "Success"
