@@ -95,7 +95,10 @@ def get_authorised_users(config):
     for i in itertools.count(1):
         resp = requests.get("https://api.github.com/repos/%s/%s/collaborators?per_page=100&page=%s" % (config["org_name"], config["repo_name"], i),
                             auth=(config["username"], config["password"]))
-        data = resp.json()
+        try:
+            data = resp.json()
+        except TypeError:
+            data = resp.json
         result |= set(item["login"] for item in data)
         if len(data) < 100:
             break
