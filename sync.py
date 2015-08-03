@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 import sys
 import os
-import cgi
 import subprocess
 import shutil
 import json
 import ConfigParser
-import getpass
 import hmac
 import itertools
 import lockfile
@@ -246,7 +244,7 @@ def get_open_pull_request_numbers(config):
 def setup(config):
     create_master(config)
     for number in get_open_pull_request_numbers(config):
-        pull_request = PullRequestCheckout.create(config["base_path"], number)
+        PullRequestCheckout.create(config["base_path"], number)
     register_events(config)
 
 def register_events(config):
