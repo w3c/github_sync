@@ -145,6 +145,8 @@ def command(comment):
 def process_issue_comment(config, data, user_is_authorised):
     comment = data["comment"]["body"]
 
+    if not "pull_request" in data["issue"]:
+        return
     if data["issue"]["pull_request"]["diff_url"] is None:
         return
     elif not user_is_authorised:
