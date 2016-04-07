@@ -90,19 +90,10 @@ def git(command, *args, **kwargs):
             raise IOError(stderr)
     return True
 
-def get_authorised_users(config):
-    result = set()
-    for i in itertools.count(1):
-        resp = requests.get("https://api.github.com/repos/%s/%s/collaborators?per_page=100&page=%s" % (config["org_name"], config["repo_name"], i),
-                            auth=(config["username"], config["password"]))
-        try:
-            data = resp.json()
-        except TypeError:
-            data = resp.json
-        result |= set(item["login"] for item in data)
-        if len(data) < 100:
-            break
-    return result
+def is_authorised_user(config, login):
+    resp = requests.get("https://api.github.com/repos/%s/%s/collaborators/%s" % (config["org_name"], config["repo_name"], login),
+                        auth=(config["username"], config["password"]))
+    return resp.status_code == 204
 
 def process_pull_request(config, data, user_is_authorised):
     base_path = config["base_path"]
@@ -159,9 +150,9 @@ def process_issue_comment(config, data, user_is_authorised):
         return
     if data["issue"]["pull_request"]["diff_url"] is None:
         return
-    elif not user_is_authorised:
-        return
     elif not command(comment):
+        return
+    elif not user_is_authorised:
         return
     else:
         update_master(config["base_path"])
@@ -209,8 +200,6 @@ def main(request, response):
                 return
             data = json.loads(data)
 
-            authorised_users = get_authorised_users(config)
-
             if "commits" in data:
                 process_push(config)
             else:
@@ -220,7 +209,7 @@ def main(request, response):
                 for key, handler in handlers.iteritems():
                     if key in data:
                         found = True
-                        user_is_authorised = data[key]["user"]["login"] in authorised_users
+                        user_is_authorised = is_authorised_user(config, data[key]["user"]["login"])
                         handler(config, data, user_is_authorised)
                         break
 
@@ -248,10 +237,9 @@ def create_master(config):
         MasterCheckout.create(base_path, "git://github.com/%s/%s.git" % (config["org_name"], config["repo_name"]))
 
 def get_open_pull_request_numbers(config):
-    authorised_users = get_authorised_users(config)
     pull_requests = requests.get("https://api.github.com/repos/%s/%s/pulls" % (config["org_name"], config["repo_name"]),
                                  auth=(config["username"], config["password"])).json()
-    return [item["number"] for item in pull_requests if item["state"] == "open" and item["user"]["login"] in authorised_users]
+    return [item["number"] for item in pull_requests if item["state"] == "open" and is_authorised_user(config, item["user"]["login"])]
 
 def setup(config):
     create_master(config)
