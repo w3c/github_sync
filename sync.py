@@ -13,7 +13,10 @@ import lockfile
 
 import requests
 
+config = None
 config_path = "~/sync.ini"
+
+from urlparse import urljoin
 
 class MasterCheckout(object):
     def __init__(self, path):
@@ -120,18 +123,25 @@ def pull_request_unlabeled(base_path, number, user_is_authorised):
     pass
 
 def start_mirror(base_path, number, user_is_authorised):
+    delete_issue_comments(number)
     if not PullRequestCheckout.exists(base_path, number):
         PullRequestCheckout.create(base_path, number)
     else:
         PullRequestCheckout.fromNumber(base_path, number).update()
+    post_issue_comment(number)
 
 def end_mirror(base_path, number, user_is_authorised):
     if PullRequestCheckout.exists(base_path, number):
         PullRequestCheckout.fromNumber(base_path, number).delete()
 
+        # There's nothing to link back to, so delete the comment doing so
+        delete_issue_comments(number)
+
 def sync_mirror(base_path, number, user_is_authorised):
+    delete_issue_comments(number)
     if PullRequestCheckout.exists(base_path, number):
         PullRequestCheckout.fromNumber(base_path, number).update()
+    post_issue_comment(number)
 
 def process_push(config):
     update_master(config["base_path"])
@@ -186,7 +196,28 @@ def post_authentic(config, body, signature):
     return True
     return signature == expected
 
+def delete_issue_comments(issue_number):
+    """Delete all user's comments in the issue containing the magic string."""
+    user_name = config["username"]
+    auth = (user_name, config["password"])
+    issues_url = "https://api.github.com/repos/%s/%s/issues/" % (config["org_name"], config["repo_name"])
+    issue_comments = requests.get(urljoin(issues_url, "%s/comments" % issue_number), auth=auth).json()
+
+    # Assuming that some bug or other condition may have caused multiple
+    # comments from this bot, delete them all.
+    for comment in issue_comments:
+        if comment["user"]["login"] == user_name and "These tests are now available" in comment["body"]:
+            requests.delete(urljoin(issues_url, "comments/%s" % comment["id"]), auth=auth)
+
+def post_issue_comment(issue_number):
+    """Post a comment in the issue pointing to the mirror of that code."""
+    auth = (config["username"], config["password"])
+    data = json.dumps({u"body": u"These tests are now available on [w3c-test.org](https://w3c-test.org/submissions/%s)" % issue_number})
+    resp = requests.post("https://api.github.com/repos/%s/%s/issues/%s/comments" % (config["org_name"], config["repo_name"], issue_number), data=data, auth=auth)
+    return resp.status_code == 201
+
 def main(request, response):
+    global config
     config = get_config()
     data = request.body
 
