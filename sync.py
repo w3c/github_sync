@@ -301,7 +301,7 @@ def register_events(config):
     print >> sys.stderr, "%i\n%s" % (resp.status_code, resp.text)
 
 def get_config():
-    config = ConfigParser.SafeConfigParser()
+    config = ConfigParser.RawConfigParser()
     config.read(os.path.abspath(os.path.expanduser(config_path)))
     rv = dict(config.items("sync"))
     if not "base_path" in rv:
