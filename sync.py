@@ -220,7 +220,7 @@ def delete_issue_comments(issue_number):
 def post_issue_comment(issue_number):
     """Post a comment in the issue pointing to the mirror of that code."""
     auth = (config["username"], config["password"])
-    data = json.dumps({u"body": u"These tests are now available on [w3c-test.org](https://w3c-test.org/submissions/%s)" % issue_number})
+    data = json.dumps({u"body": u"These tests are now available on [w3c-test.org](https://w3c-test.org/submissions/%s/)" % issue_number})
     resp = requests.post("https://api.github.com/repos/%s/%s/issues/%s/comments" % (config["org_name"], config["repo_name"], issue_number), data=data, auth=auth)
     return resp.status_code == 201
 
