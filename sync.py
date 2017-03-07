@@ -131,7 +131,6 @@ def pull_request_assigned(base_path, number, user_is_authorised):
     pass
 
 def start_mirror(base_path, number, user_is_authorised):
-    delete_issue_comments(number)
     if not PullRequestCheckout.exists(base_path, number):
         PullRequestCheckout.create(base_path, number)
     else:
@@ -146,7 +145,6 @@ def end_mirror(base_path, number, user_is_authorised):
         delete_issue_comments(number)
 
 def sync_mirror(base_path, number, user_is_authorised):
-    delete_issue_comments(number)
     if PullRequestCheckout.exists(base_path, number):
         PullRequestCheckout.fromNumber(base_path, number).update()
     post_issue_comment(number)
@@ -219,9 +217,19 @@ def delete_issue_comments(issue_number):
 
 def post_issue_comment(issue_number):
     """Post a comment in the issue pointing to the mirror of that code."""
-    auth = (config["username"], config["password"])
+    user_name = config["username"]
+    auth = (user_name, config["password"])
+    issues_url = "https://api.github.com/repos/%s/%s/issues/" % (config["org_name"], config["repo_name"])
+    issue_comments_url = urljoin(issues_url, "%s/comments" % issue_number)
+    issue_comments = requests.get(issue_comments_url, auth=auth).json()
     data = json.dumps({u"body": u"These tests are now available on [w3c-test.org](https://w3c-test.org/submissions/%s/)" % issue_number})
-    resp = requests.post("https://api.github.com/repos/%s/%s/issues/%s/comments" % (config["org_name"], config["repo_name"], issue_number), data=data, auth=auth)
+
+    for comment in issue_comments:
+        if comment["user"]["login"] == user_name and "These tests are now available" in comment["body"]:
+            comment_url = urljoin(issues_url, "comments/%s" % comment["id"])
+            resp = requests.patch(comment_url, data=data, auth=auth)
+            return resp.status_code == 201
+    resp = requests.post(issue_comments_url, data=data, auth=auth)
     return resp.status_code == 201
 
 def main(request, response):
