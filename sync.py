@@ -29,6 +29,7 @@ class MasterCheckout(object):
         os.rename(os.path.join(path, "tmp", ".git"), os.path.join(path, ".git"))
         git("reset", "--hard", "HEAD", cwd=path)
         git("config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/pr/*", cwd=path)
+        git("config", "gc.auto", "0", cwd=path)
         git("fetch", "origin", cwd=path)
         git("submodule", "init", cwd=path)
         git("submodule", "update", "--recursive", cwd=path)
@@ -60,7 +61,7 @@ class PullRequestCheckout(object):
         rv = cls(path, number)
         if not os.path.exists(path):
             os.mkdir(path)
-            git("clone", "--no-checkout", base_path, path, cwd=path)
+            git("clone", "--shared", "--no-checkout", base_path, path, cwd=path)
             git("submodule", "init", cwd=path)
             git("config", "--add", "remote.origin.fetch", "+refs/remotes/origin/pr/*:refs/pr/*", cwd=path)
         elif not PullRequestCheckout.exists(base_path, number):
