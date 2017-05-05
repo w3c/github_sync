@@ -107,11 +107,13 @@ def process_pull_request(config, data, user_is_authorised):
 
     action_handlers = {"opened": pull_request_opened,
                        "reopened": pull_request_opened,
-                       "labeled": pull_request_labeled,
-                       "unlabeled": pull_request_unlabeled,
-                       "edited": pull_request_edited,
-                       "assigned": pull_request_assigned,
-                       "review_requested": pull_request_review_requested,
+                       "labeled": pull_request_noop,
+                       "unlabeled": pull_request_noop,
+                       "edited": pull_request_noop,
+                       "assigned": pull_request_noop,
+                       "review_requested": pull_request_noop,
+                       "review_dismissed": pull_request_noop,
+                       "review_request_removed": pull_request_noop,
                        "closed": end_mirror,
                        "synchronize": sync_mirror}
     action_handlers[action](base_path, data["pull_request"]["number"], user_is_authorised)
@@ -120,19 +122,7 @@ def pull_request_opened(base_path, number, user_is_authorised):
     if user_is_authorised:
         start_mirror(base_path, number, user_is_authorised)
 
-def pull_request_labeled(base_path, number, user_is_authorised):
-    pass
-
-def pull_request_unlabeled(base_path, number, user_is_authorised):
-    pass
-
-def pull_request_edited(base_path, number, user_is_authorised):
-    pass
-
-def pull_request_assigned(base_path, number, user_is_authorised):
-    pass
-
-def pull_request_review_requested(base_path, number, user_is_authorised):
+def pull_request_noop(base_path, number, user_is_authorised):
     pass
 
 def start_mirror(base_path, number, user_is_authorised):
