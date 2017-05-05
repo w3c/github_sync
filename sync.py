@@ -140,7 +140,6 @@ def start_mirror(base_path, number, user_is_authorised):
         PullRequestCheckout.create(base_path, number)
     else:
         PullRequestCheckout.fromNumber(base_path, number).update()
-    post_issue_comment(number)
 
 def end_mirror(base_path, number, user_is_authorised):
     if PullRequestCheckout.exists(base_path, number):
@@ -152,7 +151,6 @@ def end_mirror(base_path, number, user_is_authorised):
 def sync_mirror(base_path, number, user_is_authorised):
     if PullRequestCheckout.exists(base_path, number):
         PullRequestCheckout.fromNumber(base_path, number).update()
-    post_issue_comment(number)
 
 def process_push(config):
     update_master(config["base_path"])
@@ -219,23 +217,6 @@ def delete_issue_comments(issue_number):
     for comment in issue_comments:
         if comment["user"]["login"] == user_name and "These tests are now available" in comment["body"]:
             requests.delete(urljoin(issues_url, "comments/%s" % comment["id"]), auth=auth)
-
-def post_issue_comment(issue_number):
-    """Post a comment in the issue pointing to the mirror of that code."""
-    user_name = config["username"]
-    auth = (user_name, config["password"])
-    issues_url = "https://api.github.com/repos/%s/%s/issues/" % (config["org_name"], config["repo_name"])
-    issue_comments_url = urljoin(issues_url, "%s/comments" % issue_number)
-    issue_comments = requests.get(issue_comments_url, auth=auth).json()
-    data = json.dumps({u"body": u"These tests are now available on [w3c-test.org](https://w3c-test.org/submissions/%s/)" % issue_number})
-
-    for comment in issue_comments:
-        if comment["user"]["login"] == user_name and "These tests are now available" in comment["body"]:
-            comment_url = urljoin(issues_url, "comments/%s" % comment["id"])
-            resp = requests.patch(comment_url, data=data, auth=auth)
-            return resp.status_code == 201
-    resp = requests.post(issue_comments_url, data=data, auth=auth)
-    return resp.status_code == 201
 
 def main(request, response):
     global config
